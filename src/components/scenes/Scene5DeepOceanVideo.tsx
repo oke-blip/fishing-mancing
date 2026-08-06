@@ -1,126 +1,123 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   createDiscreteVideoScrub,
+  getMinScrubHeight,
   getPxPerVideoSecond,
   scheduleScrollTriggerRefresh,
-  whenVideoPlayable,
+  whenVideoHasDuration,
 } from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
 
+const SRC = "/assets/scene5-deep-sea.mp4";
+
 /**
- * Scene5DeepOceanVideo — waits for playable frames, mobile scroll-end scrub.
+ * Scene5 — always scrollable; scrub arms after duration is known.
  */
 export function Scene5DeepOceanVideo() {
   const scrollSpacerRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [active, setActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const ctxRef = useRef<gsap.Context | null>(null);
-  const durationRef = useRef(0);
-  const setupLockRef = useRef(false);
+  const setupDoneRef = useRef(false);
 
   useEffect(() => {
-    const spacer = scrollSpacerRef.current;
-    if (!spacer) return;
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        const visible = Boolean(entry?.isIntersecting);
-        if (visible) setActive(true);
-        const video = videoRef.current;
-        if (video && !visible) video.pause();
-      },
-      { rootMargin: "80% 0px", threshold: 0.01 },
-    );
-
-    io.observe(spacer);
-    return () => io.disconnect();
-  }, []);
-
-  const setupScrub = async () => {
     const spacer = scrollSpacerRef.current;
     const pin = pinRef.current;
     const video = videoRef.current;
-    if (!spacer || !pin || !video || setupLockRef.current) return;
+    if (!spacer || !pin || !video) return;
 
-    setupLockRef.current = true;
+    let cancelled = false;
+    spacer.style.height = `${getMinScrubHeight()}px`;
+
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
     video.preload = "auto";
+    video.src = SRC;
 
-    const ok = await whenVideoPlayable(video);
-    if (!ok || !video.duration || Number.isNaN(video.duration)) {
-      setFailed(true);
-      setupLockRef.current = false;
-      return;
-    }
+    const setup = async () => {
+      if (cancelled || setupDoneRef.current) return;
 
-    if (ctxRef.current && durationRef.current === video.duration) {
+      const hasDuration = await whenVideoHasDuration(video);
+      if (cancelled) return;
+
+      if (!hasDuration || !video.duration) {
+        setFailed(true);
+        scheduleScrollTriggerRefresh(200);
+        return;
+      }
+
+      setupDoneRef.current = true;
+      video.pause();
+      try {
+        video.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+
+      spacer.style.height = `${Math.max(
+        getMinScrubHeight(),
+        video.duration * getPxPerVideoSecond(),
+      )}px`;
       setReady(true);
-      setupLockRef.current = false;
-      return;
-    }
 
-    video.pause();
-    try {
-      video.currentTime = 0;
-    } catch {
-      /* ignore */
-    }
+      let lastFade = -1;
 
-    durationRef.current = video.duration;
-    spacer.style.height = `${video.duration * getPxPerVideoSecond()}px`;
-    setReady(true);
+      ctxRef.current?.revert();
+      ctxRef.current = gsap.context(() => {
+        gsap.set(pin, { opacity: 0 });
 
-    let lastFade = -1;
+        createDiscreteVideoScrub({
+          trigger: spacer,
+          pin,
+          video,
+          progressToVideo: (p) => {
+            if (p <= 0.2) return 0;
+            return (p - 0.2) / 0.8;
+          },
+          onUpdateExtra: (self) => {
+            const fade = Math.min(1, self.progress / 0.2);
+            if (Math.abs(fade - lastFade) < 0.04) return;
+            lastFade = fade;
+            pin.style.opacity = String(fade);
+          },
+        });
+      }, spacer);
 
-    ctxRef.current?.revert();
-    ctxRef.current = gsap.context(() => {
-      gsap.set(pin, { opacity: 0 });
+      scheduleScrollTriggerRefresh(200);
+    };
 
-      createDiscreteVideoScrub({
-        trigger: spacer,
-        pin,
-        video,
-        progressToVideo: (p) => {
-          if (p <= 0.2) return 0;
-          return (p - 0.2) / 0.8;
-        },
-        onUpdateExtra: (self) => {
-          const fade = Math.min(1, self.progress / 0.2);
-          if (Math.abs(fade - lastFade) < 0.04) return;
-          lastFade = fade;
-          pin.style.opacity = String(fade);
-        },
-      });
-    }, spacer);
+    const onMeta = () => {
+      void setup();
+    };
+    const onErr = () => {
+      if (!cancelled) {
+        setFailed(true);
+        spacer.style.height = `${getMinScrubHeight()}px`;
+        scheduleScrollTriggerRefresh(200);
+      }
+    };
 
-    scheduleScrollTriggerRefresh(250);
-    setupLockRef.current = false;
-  };
-
-  useLayoutEffect(() => {
-    if (!active) return;
-    const video = videoRef.current;
-    if (!video) return;
-
-    void setupScrub();
-    const onErr = () => setFailed(true);
+    video.addEventListener("loadedmetadata", onMeta);
     video.addEventListener("error", onErr);
-    return () => video.removeEventListener("error", onErr);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
+    if (video.readyState >= 1) void setup();
 
-  useEffect(() => {
     return () => {
+      cancelled = true;
+      video.removeEventListener("loadedmetadata", onMeta);
+      video.removeEventListener("error", onErr);
       ctxRef.current?.revert();
       ctxRef.current = null;
-      if (scrollSpacerRef.current) scrollSpacerRef.current.style.height = "";
+      setupDoneRef.current = false;
+      spacer.style.height = "";
     };
   }, []);
 
@@ -129,6 +126,7 @@ export function Scene5DeepOceanVideo() {
       ref={scrollSpacerRef}
       id="scene-5-deep-ocean"
       className="relative z-20 w-full bg-[#020b14]"
+      style={{ minHeight: "300vh" }}
       aria-label="Scene 5: Deep Ocean"
     >
       <div
@@ -153,10 +151,9 @@ export function Scene5DeepOceanVideo() {
         <video
           ref={videoRef}
           className="landscape-stage__media absolute inset-0"
-          src={active ? "/assets/scene5-deep-sea.mp4" : undefined}
           muted
           playsInline
-          preload={active ? "auto" : "none"}
+          preload="auto"
           disableRemotePlayback
           aria-hidden
         />

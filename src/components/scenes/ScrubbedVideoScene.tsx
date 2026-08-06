@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   createDiscreteVideoScrub,
+  getMinScrubHeight,
   getPxPerVideoSecond,
   scheduleScrollTriggerRefresh,
-  whenVideoPlayable,
+  whenVideoHasDuration,
 } from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -22,8 +23,8 @@ type ScrubbedVideoSceneProps = {
 };
 
 /**
- * Scroll-scrubbed video with mobile-safe discrete seeks.
- * Waits for playable frames before enabling scrub (fixes blank/half-loaded assets).
+ * Always mounts the video src, sets a min scroll height immediately,
+ * then upgrades height from metadata. Never blocks page scroll on load failure.
  */
 export function ScrubbedVideoScene({
   id,
@@ -36,111 +37,102 @@ export function ScrubbedVideoScene({
   const scrollSpacerRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [active, setActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const ctxRef = useRef<gsap.Context | null>(null);
-  const durationRef = useRef(0);
-  const setupLockRef = useRef(false);
+  const setupDoneRef = useRef(false);
 
   useEffect(() => {
-    const spacer = scrollSpacerRef.current;
-    if (!spacer) return;
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        const visible = Boolean(entry?.isIntersecting);
-        if (visible) setActive(true);
-
-        const video = videoRef.current;
-        if (!video) return;
-        if (!visible) video.pause();
-      },
-      // Prefetch a bit earlier so frames exist before the pin starts
-      { rootMargin: "80% 0px", threshold: 0.01 },
-    );
-
-    io.observe(spacer);
-    return () => io.disconnect();
-  }, []);
-
-  const setupScrub = async () => {
     const spacer = scrollSpacerRef.current;
     const pin = pinRef.current;
     const video = videoRef.current;
-    if (!spacer || !pin || !video || setupLockRef.current) return;
+    if (!spacer || !pin || !video) return;
 
-    setupLockRef.current = true;
+    let cancelled = false;
 
-    const ok = await whenVideoPlayable(video);
-    if (!ok || !video.duration || Number.isNaN(video.duration)) {
-      setFailed(true);
-      setupLockRef.current = false;
-      return;
-    }
+    // Guarantee scrollable space even before metadata
+    spacer.style.height = `${getMinScrubHeight()}px`;
 
-    if (ctxRef.current && durationRef.current === video.duration) {
-      setReady(true);
-      setupLockRef.current = false;
-      return;
-    }
-
-    video.pause();
-    try {
-      video.currentTime = 0;
-    } catch {
-      /* ignore */
-    }
-
-    durationRef.current = video.duration;
-    spacer.style.height = `${video.duration * getPxPerVideoSecond()}px`;
-    setReady(true);
-    setFailed(false);
-
-    ctxRef.current?.revert();
-    ctxRef.current = gsap.context(() => {
-      createDiscreteVideoScrub({
-        trigger: spacer,
-        pin,
-        video,
-      });
-    }, spacer);
-
-    scheduleScrollTriggerRefresh(250);
-    setupLockRef.current = false;
-  };
-
-  useLayoutEffect(() => {
-    if (!active) return;
-    const video = videoRef.current;
-    if (!video) return;
-
-    // Full preload once activated — metadata-only leaves blank frames on mobile
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
     video.preload = "auto";
-    void setupScrub();
+    video.src = src;
 
-    const onErr = () => setFailed(true);
+    const setup = async () => {
+      if (cancelled || setupDoneRef.current) return;
+
+      const hasDuration = await whenVideoHasDuration(video);
+      if (cancelled) return;
+
+      if (!hasDuration || !video.duration) {
+        // Keep min height so the user can still scroll past this section
+        setFailed(true);
+        scheduleScrollTriggerRefresh(200);
+        return;
+      }
+
+      setupDoneRef.current = true;
+      video.pause();
+      try {
+        video.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+
+      spacer.style.height = `${Math.max(
+        getMinScrubHeight(),
+        video.duration * getPxPerVideoSecond(),
+      )}px`;
+      setReady(true);
+      setFailed(false);
+
+      ctxRef.current?.revert();
+      ctxRef.current = gsap.context(() => {
+        createDiscreteVideoScrub({
+          trigger: spacer,
+          pin,
+          video,
+        });
+      }, spacer);
+
+      scheduleScrollTriggerRefresh(200);
+    };
+
+    const onMeta = () => {
+      void setup();
+    };
+    const onErr = () => {
+      if (!cancelled) {
+        setFailed(true);
+        spacer.style.height = `${getMinScrubHeight()}px`;
+        scheduleScrollTriggerRefresh(200);
+      }
+    };
+
+    video.addEventListener("loadedmetadata", onMeta);
     video.addEventListener("error", onErr);
 
-    return () => {
-      video.removeEventListener("error", onErr);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, src]);
+    if (video.readyState >= 1) void setup();
 
-  useEffect(() => {
     return () => {
+      cancelled = true;
+      video.removeEventListener("loadedmetadata", onMeta);
+      video.removeEventListener("error", onErr);
       ctxRef.current?.revert();
       ctxRef.current = null;
-      if (scrollSpacerRef.current) scrollSpacerRef.current.style.height = "";
+      setupDoneRef.current = false;
+      spacer.style.height = "";
     };
-  }, []);
+  }, [src]);
 
   return (
     <div
       ref={scrollSpacerRef}
       id={id}
       className={`relative z-20 w-full ${className}`}
+      style={{ minHeight: "300vh" }}
       aria-label={ariaLabel}
     >
       <div
@@ -169,10 +161,9 @@ export function ScrubbedVideoScene({
         <video
           ref={videoRef}
           className="landscape-stage__media absolute inset-0"
-          src={active ? src : undefined}
           muted
           playsInline
-          preload={active ? "auto" : "none"}
+          preload="auto"
           disableRemotePlayback
           aria-hidden
         />

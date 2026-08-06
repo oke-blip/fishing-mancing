@@ -3,22 +3,17 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
+/** Desktop step; mobile uses larger steps + scroll-end flush */
 export const TIME_STEP = 0.2;
-export const TIME_STEP_MOBILE = 0.5;
+export const TIME_STEP_MOBILE = 0.6;
 
+/** 1s of video ≈ this many px of scroll */
 export const PX_PER_VIDEO_SECOND = 1000;
-export const PX_PER_VIDEO_SECOND_MOBILE = 500;
-
-/** Fallback scroll length before metadata arrives — page must always be scrollable */
-export const MIN_SCRUB_VIEWPORTS = 3;
+export const PX_PER_VIDEO_SECOND_MOBILE = 450;
 
 export function isTouchDevice() {
   if (typeof window === "undefined") return false;
-  return (
-    "ontouchstart" in window ||
-    navigator.maxTouchPoints > 0 ||
-    window.matchMedia("(pointer: coarse)").matches
-  );
+  return window.matchMedia("(hover: none), (pointer: coarse)").matches;
 }
 
 export function getTimeStep() {
@@ -29,13 +24,9 @@ export function getPxPerVideoSecond() {
   return isTouchDevice() ? PX_PER_VIDEO_SECOND_MOBILE : PX_PER_VIDEO_SECOND;
 }
 
-export function getMinScrubHeight() {
-  if (typeof window === "undefined") return 2400;
-  return Math.round(window.innerHeight * MIN_SCRUB_VIEWPORTS);
-}
-
+/** Debounced global refresh — avoids refresh storms when many scenes load */
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-export function scheduleScrollTriggerRefresh(delay = 300) {
+export function scheduleScrollTriggerRefresh(delay = 280) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     ScrollTrigger.refresh();
@@ -55,15 +46,14 @@ function ensureScrollEndBridge() {
 }
 
 /**
- * Resolve as soon as duration is known (loadedmetadata).
- * Do NOT call video.load() here — that aborts in-flight fetches on iOS/Android.
+ * Wait until the video has decodable frames (fixes blank / half-loaded mobile scrub).
  */
-export function whenVideoHasDuration(
+export function whenVideoPlayable(
   video: HTMLVideoElement,
-  timeoutMs = 12000,
+  timeoutMs = 8000,
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    if (video.duration && !Number.isNaN(video.duration) && video.duration !== Infinity) {
+    if (video.readyState >= 2) {
       resolve(true);
       return;
     }
@@ -72,32 +62,25 @@ export function whenVideoHasDuration(
     const finish = (ok: boolean) => {
       if (done) return;
       done = true;
-      video.removeEventListener("loadedmetadata", onMeta);
-      video.removeEventListener("durationchange", onMeta);
+      video.removeEventListener("loadeddata", onReady);
+      video.removeEventListener("canplay", onReady);
       video.removeEventListener("error", onErr);
       clearTimeout(timer);
       resolve(ok);
     };
-
-    const onMeta = () => {
-      if (video.duration && !Number.isNaN(video.duration) && video.duration !== Infinity) {
-        finish(true);
-      }
-    };
+    const onReady = () => finish(true);
     const onErr = () => finish(false);
 
-    video.addEventListener("loadedmetadata", onMeta);
-    video.addEventListener("durationchange", onMeta);
+    video.addEventListener("loadeddata", onReady);
+    video.addEventListener("canplay", onReady);
     video.addEventListener("error", onErr);
-    const timer = setTimeout(
-      () =>
-        finish(
-          Boolean(
-            video.duration && !Number.isNaN(video.duration) && video.duration !== Infinity,
-          ),
-        ),
-      timeoutMs,
-    );
+    const timer = setTimeout(() => finish(video.readyState >= 1), timeoutMs);
+
+    try {
+      video.load();
+    } catch {
+      /* ignore */
+    }
   });
 }
 
@@ -109,6 +92,9 @@ function quantizeTime(video: HTMLVideoElement, progress: number, step: number) {
   );
 }
 
+/**
+ * Apply a discrete seek if the stepped time changed enough and decoder is free.
+ */
 export function applyDiscreteSeek(
   video: HTMLVideoElement,
   progress: number,
@@ -116,17 +102,16 @@ export function applyDiscreteSeek(
   step: number,
 ): void {
   if (!video.duration || Number.isNaN(video.duration)) return;
-  // HAVE_METADATA (1) is enough to assign currentTime on most mobile browsers
-  if (video.readyState < 1 || video.seeking) return;
+  if (video.seeking || video.readyState < 2) return;
 
   const steppedTime = quantizeTime(video, progress, step);
-  if (Math.abs(steppedTime - lastSeekTime.current) < step * 0.7) return;
+  if (Math.abs(steppedTime - lastSeekTime.current) < step * 0.75) return;
 
   lastSeekTime.current = steppedTime;
   try {
     video.currentTime = steppedTime;
   } catch {
-    /* ignore */
+    /* seek storm / not ready */
   }
 }
 
@@ -138,6 +123,11 @@ export type DiscreteScrubOptions = {
   onUpdateExtra?: (self: ScrollTrigger) => void;
 };
 
+/**
+ * ScrollTrigger that seeks video in discrete jumps.
+ * On mobile: mostly seeks when finger velocity is low or scroll ends —
+ * mid-swipe seeking is what causes stutter.
+ */
 export function createDiscreteVideoScrub({
   trigger,
   pin,
@@ -162,18 +152,17 @@ export function createDiscreteVideoScrub({
     mobileSeekFlushers.add(flush);
   }
 
-  return ScrollTrigger.create({
+  const st = ScrollTrigger.create({
     trigger,
     start: "top top",
     end: "bottom bottom",
     pin,
-    // Default pin (fixed) is more reliable for scroll across OEMs than transform
+    pinType: touch ? "transform" : "fixed",
     scrub: false,
-    anticipatePin: 0,
+    anticipatePin: touch ? 0 : 1,
     invalidateOnRefresh: true,
     fastScrollEnd: true,
-    // preventOverlaps can freeze scroll when many pins stack on mobile
-    preventOverlaps: false,
+    preventOverlaps: true,
     onUpdate: (self) => {
       if (!self.isActive) return;
 
@@ -181,7 +170,9 @@ export function createDiscreteVideoScrub({
       pendingProgress.current = videoProgress;
 
       if (touch) {
-        if (Math.abs(self.getVelocity()) < 500) {
+        // Only scrub while the finger is nearly still — avoids decoder hitch mid-swipe
+        const velocity = Math.abs(self.getVelocity());
+        if (velocity < 400) {
           applyDiscreteSeek(video, videoProgress, lastSeekTime, step);
         }
       } else {
@@ -190,8 +181,14 @@ export function createDiscreteVideoScrub({
 
       onUpdateExtra?.(self);
     },
+    onRefresh: () => {
+      // Re-apply after layout so the frame matches scroll position
+      flush();
+    },
     onKill: () => {
       mobileSeekFlushers.delete(flush);
     },
   });
+
+  return st;
 }

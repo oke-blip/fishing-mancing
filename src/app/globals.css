@@ -52,14 +52,15 @@ body {
   scrollbar-width: none; /* Firefox */
 }
 
-/* Portrait lock — JS toggles .is-portrait; do not rely on orientation MQ alone */
+/* Portrait lock — full-screen gate inside the *visible* viewport */
 .portrait-lock {
   display: none;
   position: fixed;
-  inset: 0;
+  top: var(--app-top, 0px);
+  left: var(--app-left, 0px);
   z-index: 9999;
-  width: 100%;
-  height: 100%;
+  width: var(--app-width, 100svw);
+  height: var(--app-height, 100svh);
   margin: 0;
   padding: 0;
   background: #000;
@@ -73,57 +74,67 @@ body {
   object-position: center;
 }
 
-/* Locked: overlay only — keep comic in DOM so media can load underneath */
-html.is-portrait,
-body.is-portrait {
-  overflow: hidden !important;
-  touch-action: none !important;
-  overscroll-behavior: none !important;
+@media (orientation: portrait) and (hover: none),
+  (orientation: portrait) and (pointer: coarse) {
+  .portrait-lock {
+    display: block !important;
+  }
 }
 
-html.is-portrait .portrait-lock,
-body.is-portrait .portrait-lock {
-  display: block !important;
+@media (orientation: portrait) {
+  /* Only apply lock styles when JS marks a real mobile portrait session */
+  html.is-portrait,
+  body.is-portrait {
+    overflow: hidden !important;
+    height: var(--app-height, 100svh) !important;
+    max-height: var(--app-height, 100svh) !important;
+    touch-action: none !important;
+    overscroll-behavior: none !important;
+  }
+
+  html.is-portrait .portrait-lock,
+  body.is-portrait .portrait-lock {
+    display: block !important;
+  }
+
+  html.is-portrait .comic-root,
+  body.is-portrait .comic-root {
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
 
-/* Never visibility:hidden the comic — that breaks IntersectionObserver + video on many phones */
-html.is-portrait .comic-root,
-body.is-portrait .comic-root {
-  pointer-events: none;
-}
+@media (orientation: landscape) {
+  html,
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: auto;
+    max-height: none;
+    touch-action: pan-y;
+  }
 
-/* Unlocked / landscape: force scrollable document */
-html:not(.is-portrait),
-body:not(.is-portrait) {
-  overflow-x: hidden;
-  overflow-y: auto;
-  height: auto;
-  max-height: none;
-  touch-action: pan-y;
-}
+  .portrait-lock {
+    display: none !important;
+    pointer-events: none !important;
+  }
 
-html:not(.is-portrait) .portrait-lock,
-body:not(.is-portrait) .portrait-lock {
-  display: none !important;
-  pointer-events: none !important;
-}
-
-.comic-root {
-  visibility: visible;
-  pointer-events: auto;
-  height: auto;
-  overflow: visible;
-  min-height: 100%;
+  .comic-root {
+    visibility: visible;
+    pointer-events: auto;
+    height: auto !important;
+    overflow: visible !important;
+  }
 }
 
 /*
- * Landscape stage — use svh/dvh only (avoid JS --app-height locking stages to 0).
+ * Landscape stage — prefer svh (chrome visible) so content isn't covered.
  */
 .landscape-stage {
   position: relative;
   width: 100%;
   height: 100svh;
-  height: 100dvh;
+  height: var(--app-height, 100svh);
   max-width: 100%;
   overflow: hidden;
 }

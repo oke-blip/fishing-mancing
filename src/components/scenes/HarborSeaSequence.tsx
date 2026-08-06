@@ -55,9 +55,10 @@ export function HarborSeaSequence() {
           start: "top top",
           end: "+=480%",
           pin: true,
-          // Soft scrub on mobile; avoid long lag that feels like freezes
+          pinType: isTouch ? "transform" : "fixed",
+          // Short scrub lag — long scrub (1.2) feels like stutter on phones
           scrub: isTouch ? 0.35 : true,
-          anticipatePin: 0,
+          anticipatePin: isTouch ? 0 : 1,
           // Snap fights finger scrolling and feels like the page "stops"
           ...(isTouch
             ? {}

@@ -7,7 +7,6 @@ import {
   createDiscreteVideoScrub,
   getPxPerVideoSecond,
   scheduleScrollTriggerRefresh,
-  whenVideoPlayable,
 } from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -22,8 +21,8 @@ type ScrubbedVideoSceneProps = {
 };
 
 /**
- * Scroll-scrubbed video with mobile-safe discrete seeks.
- * Waits for playable frames before enabling scrub (fixes blank/half-loaded assets).
+ * Scroll-scrubbed video with discrete, rAF-throttled seeks.
+ * Lazy-loads once near the viewport; pauses off-screen to ease mobile GPU load.
  */
 export function ScrubbedVideoScene({
   id,
@@ -41,7 +40,6 @@ export function ScrubbedVideoScene({
   const [failed, setFailed] = useState(false);
   const ctxRef = useRef<gsap.Context | null>(null);
   const durationRef = useRef(0);
-  const setupLockRef = useRef(false);
 
   useEffect(() => {
     const spacer = scrollSpacerRef.current;
@@ -54,36 +52,27 @@ export function ScrubbedVideoScene({
 
         const video = videoRef.current;
         if (!video) return;
-        if (!visible) video.pause();
+        if (!visible) {
+          video.pause();
+        }
       },
-      // Prefetch a bit earlier so frames exist before the pin starts
-      { rootMargin: "80% 0px", threshold: 0.01 },
+      { rootMargin: "50% 0px", threshold: 0.01 },
     );
 
     io.observe(spacer);
     return () => io.disconnect();
   }, []);
 
-  const setupScrub = async () => {
+  const setupScrub = () => {
     const spacer = scrollSpacerRef.current;
     const pin = pinRef.current;
     const video = videoRef.current;
-    if (!spacer || !pin || !video || setupLockRef.current) return;
-
-    setupLockRef.current = true;
-
-    const ok = await whenVideoPlayable(video);
-    if (!ok || !video.duration || Number.isNaN(video.duration)) {
-      setFailed(true);
-      setupLockRef.current = false;
+    if (!spacer || !pin || !video) return;
+    if (!video.duration || Number.isNaN(video.duration) || video.duration === Infinity)
       return;
-    }
 
-    if (ctxRef.current && durationRef.current === video.duration) {
-      setReady(true);
-      setupLockRef.current = false;
-      return;
-    }
+    // Avoid rebuilding ST repeatedly (refresh storms = freezes)
+    if (ctxRef.current && durationRef.current === video.duration) return;
 
     video.pause();
     try {
@@ -106,8 +95,7 @@ export function ScrubbedVideoScene({
       });
     }, spacer);
 
-    scheduleScrollTriggerRefresh(250);
-    setupLockRef.current = false;
+    scheduleScrollTriggerRefresh(200);
   };
 
   useLayoutEffect(() => {
@@ -115,14 +103,16 @@ export function ScrubbedVideoScene({
     const video = videoRef.current;
     if (!video) return;
 
-    // Full preload once activated — metadata-only leaves blank frames on mobile
-    video.preload = "auto";
-    void setupScrub();
+    video.load();
+    if (video.readyState >= 1) setupScrub();
 
+    const onMeta = () => setupScrub();
     const onErr = () => setFailed(true);
+    video.addEventListener("loadedmetadata", onMeta);
     video.addEventListener("error", onErr);
 
     return () => {
+      video.removeEventListener("loadedmetadata", onMeta);
       video.removeEventListener("error", onErr);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -172,7 +162,7 @@ export function ScrubbedVideoScene({
           src={active ? src : undefined}
           muted
           playsInline
-          preload={active ? "auto" : "none"}
+          preload="metadata"
           disableRemotePlayback
           aria-hidden
         />

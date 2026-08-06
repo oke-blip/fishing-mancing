@@ -3,13 +3,13 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-/** Desktop step; mobile uses larger steps + scroll-end flush */
-export const TIME_STEP = 0.2;
-export const TIME_STEP_MOBILE = 0.6;
+/** Desktop step; mobile uses larger steps to keep the main thread free */
+export const TIME_STEP = 0.15;
+export const TIME_STEP_MOBILE = 0.45;
 
 /** 1s of video ≈ this many px of scroll */
 export const PX_PER_VIDEO_SECOND = 1000;
-export const PX_PER_VIDEO_SECOND_MOBILE = 450;
+export const PX_PER_VIDEO_SECOND_MOBILE = 500;
 
 export function isTouchDevice() {
   if (typeof window === "undefined") return false;
@@ -26,93 +26,50 @@ export function getPxPerVideoSecond() {
 
 /** Debounced global refresh — avoids refresh storms when many scenes load */
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-export function scheduleScrollTriggerRefresh(delay = 280) {
+export function scheduleScrollTriggerRefresh(delay = 200) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(() => {
     ScrollTrigger.refresh();
   }, delay);
 }
 
-type FlushFn = () => void;
-const mobileSeekFlushers = new Set<FlushFn>();
-let scrollEndBound = false;
-
-function ensureScrollEndBridge() {
-  if (scrollEndBound || typeof window === "undefined") return;
-  scrollEndBound = true;
-  ScrollTrigger.addEventListener("scrollEnd", () => {
-    mobileSeekFlushers.forEach((fn) => fn());
-  });
-}
-
 /**
- * Wait until the video has decodable frames (fixes blank / half-loaded mobile scrub).
+ * Queue at most one seek per animation frame.
+ * Mobile decoders freeze the UI if currentTime is set every scroll event.
  */
-export function whenVideoPlayable(
-  video: HTMLVideoElement,
-  timeoutMs = 8000,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (video.readyState >= 2) {
-      resolve(true);
-      return;
-    }
-
-    let done = false;
-    const finish = (ok: boolean) => {
-      if (done) return;
-      done = true;
-      video.removeEventListener("loadeddata", onReady);
-      video.removeEventListener("canplay", onReady);
-      video.removeEventListener("error", onErr);
-      clearTimeout(timer);
-      resolve(ok);
-    };
-    const onReady = () => finish(true);
-    const onErr = () => finish(false);
-
-    video.addEventListener("loadeddata", onReady);
-    video.addEventListener("canplay", onReady);
-    video.addEventListener("error", onErr);
-    const timer = setTimeout(() => finish(video.readyState >= 1), timeoutMs);
-
-    try {
-      video.load();
-    } catch {
-      /* ignore */
-    }
-  });
-}
-
-function quantizeTime(video: HTMLVideoElement, progress: number, step: number) {
-  const raw = progress * video.duration;
-  return Math.min(
-    video.duration,
-    Math.max(0, Math.round(raw / step) * step),
-  );
-}
-
-/**
- * Apply a discrete seek if the stepped time changed enough and decoder is free.
- */
-export function applyDiscreteSeek(
+export function seekVideoDiscrete(
   video: HTMLVideoElement,
   progress: number,
   lastSeekTime: { current: number },
-  step: number,
+  step = getTimeStep(),
+  pendingRaf: { current: number | null },
 ): void {
   if (!video.duration || Number.isNaN(video.duration)) return;
-  if (video.seeking || video.readyState < 2) return;
+  if (video.readyState < 1) return;
 
-  const steppedTime = quantizeTime(video, progress, step);
-  if (Math.abs(steppedTime - lastSeekTime.current) < step * 0.75) return;
+  const rawTargetTime = progress * video.duration;
+  const steppedTime = Math.min(
+    video.duration,
+    Math.max(0, Math.round(rawTargetTime / step) * step),
+  );
 
-  lastSeekTime.current = steppedTime;
-  try {
-    video.currentTime = steppedTime;
-  } catch {
-    /* seek storm / not ready */
-  }
+  if (Math.abs(steppedTime - lastSeekTime.current) < step * 0.85) return;
+
+  // Always record intent; apply on next frame if not already seeking
+  const apply = () => {
+    pendingRaf.current = null;
+    if (video.seeking || video.readyState < 1) return;
+    if (Math.abs(steppedTime - lastSeekTime.current) < step * 0.5) return;
+    lastSeekTime.current = steppedTime;
+    try {
+      video.currentTime = steppedTime;
+    } catch {
+      /* ignore seek storms */
+    }
+  };
+
+  if (pendingRaf.current != null) return;
+  pendingRaf.current = requestAnimationFrame(apply);
 }
 
 export type DiscreteScrubOptions = {
@@ -124,9 +81,8 @@ export type DiscreteScrubOptions = {
 };
 
 /**
- * ScrollTrigger that seeks video in discrete jumps.
- * On mobile: mostly seeks when finger velocity is low or scroll ends —
- * mid-swipe seeking is what causes stutter.
+ * ScrollTrigger that seeks video in discrete jumps (no scrub tween).
+ * Call inside gsap.context() so revert() cleans it up.
  */
 export function createDiscreteVideoScrub({
   trigger,
@@ -136,27 +92,16 @@ export function createDiscreteVideoScrub({
   onUpdateExtra,
 }: DiscreteScrubOptions) {
   const lastSeekTime = { current: -1 };
-  const pendingProgress = { current: 0 };
+  const pendingRaf = { current: null as number | null };
   const step = getTimeStep();
   const touch = isTouchDevice();
-
-  const mapProgress = (p: number) =>
-    progressToVideo ? progressToVideo(p) : p;
-
-  const flush = () => {
-    applyDiscreteSeek(video, pendingProgress.current, lastSeekTime, step);
-  };
-
-  if (touch) {
-    ensureScrollEndBridge();
-    mobileSeekFlushers.add(flush);
-  }
 
   const st = ScrollTrigger.create({
     trigger,
     start: "top top",
     end: "bottom bottom",
     pin,
+    // transform pins are cheaper / less sticky on mobile WebKit
     pinType: touch ? "transform" : "fixed",
     scrub: false,
     anticipatePin: touch ? 0 : 1,
@@ -164,29 +109,26 @@ export function createDiscreteVideoScrub({
     fastScrollEnd: true,
     preventOverlaps: true,
     onUpdate: (self) => {
+      // Skip video work when this pin is not the active one
       if (!self.isActive) return;
 
-      const videoProgress = mapProgress(self.progress);
-      pendingProgress.current = videoProgress;
-
-      if (touch) {
-        // Only scrub while the finger is nearly still — avoids decoder hitch mid-swipe
-        const velocity = Math.abs(self.getVelocity());
-        if (velocity < 400) {
-          applyDiscreteSeek(video, videoProgress, lastSeekTime, step);
-        }
-      } else {
-        applyDiscreteSeek(video, videoProgress, lastSeekTime, step);
-      }
-
+      const videoProgress = progressToVideo
+        ? progressToVideo(self.progress)
+        : self.progress;
+      seekVideoDiscrete(video, videoProgress, lastSeekTime, step, pendingRaf);
       onUpdateExtra?.(self);
     },
-    onRefresh: () => {
-      // Re-apply after layout so the frame matches scroll position
-      flush();
+    onLeave: () => {
+      if (pendingRaf.current != null) {
+        cancelAnimationFrame(pendingRaf.current);
+        pendingRaf.current = null;
+      }
     },
-    onKill: () => {
-      mobileSeekFlushers.delete(flush);
+    onLeaveBack: () => {
+      if (pendingRaf.current != null) {
+        cancelAnimationFrame(pendingRaf.current);
+        pendingRaf.current = null;
+      }
     },
   });
 

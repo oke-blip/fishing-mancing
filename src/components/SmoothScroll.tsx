@@ -23,15 +23,16 @@ export function SmoothScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
     ScrollTrigger.config({ ignoreMobileResize: true });
 
-    // Touch devices: native scroll — avoid Lenis + aggressive ticker catch-up
+    // Touch devices: do not instantiate Lenis
     if (isCoarsePointer()) {
-      gsap.ticker.lagSmoothing(500, 33);
       const onOrient = () => {
         requestAnimationFrame(() => ScrollTrigger.refresh());
       };
       window.addEventListener("orientationchange", onOrient);
+      window.addEventListener("resize", onOrient);
       return () => {
         window.removeEventListener("orientationchange", onOrient);
+        window.removeEventListener("resize", onOrient);
       };
     }
 

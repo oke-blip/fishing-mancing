@@ -125,7 +125,7 @@ export function Scene2DiveTransition() {
             end: "+=180%",
             pin: true,
             pinType: isTouch ? "transform" : "fixed",
-            scrub: isTouch ? 0.35 : true,
+            scrub: isTouch ? 1 : true,
             anticipatePin: isTouch ? 0 : 1,
           },
         })

@@ -46,24 +46,37 @@ export function HarborSeaSequence() {
       gsap.set(boat, { opacity: 0, xPercent: 0 });
       gsap.set(bubble, { opacity: 0, yPercent: 8 });
 
+      const isTouch =
+        window.matchMedia("(hover: none), (pointer: coarse)").matches;
+
       const sequenceTl = gsap.timeline({
         scrollTrigger: {
           trigger: root,
           start: "top top",
           end: "+=480%",
           pin: true,
-          scrub: true,
-          anticipatePin: 1,
-          snap: {
-            snapTo: "labelsDirectional",
-            duration: 0.45,
-            delay: 0.05,
-            ease: "power1.inOut",
-          },
+          pinType: isTouch ? "transform" : "fixed",
+          // Soft scrub on mobile; hard scrub:true + snap freezes many phones
+          scrub: isTouch ? 1.2 : true,
+          anticipatePin: isTouch ? 0 : 1,
+          // Snap fights finger scrolling and feels like the page "stops"
+          ...(isTouch
+            ? {}
+            : {
+                snap: {
+                  snapTo: "labelsDirectional",
+                  duration: 0.45,
+                  delay: 0.05,
+                  ease: "power1.inOut",
+                },
+              }),
           onUpdate: (self) => {
             if (self.progress > 0.28 && seaVideo && seaVideo.paused) {
               seaVideo.muted = true;
               seaVideo.play().catch(() => {});
+            }
+            if (self.progress < 0.2 && seaVideo && !seaVideo.paused) {
+              seaVideo.pause();
             }
           },
         },

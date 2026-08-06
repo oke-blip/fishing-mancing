@@ -4,31 +4,42 @@ import { useEffect, useRef } from "react";
 
 /**
  * Scene1VideoIntro — full-viewport looping video.
- * No text overlays. Scrolls away naturally to reveal Scene 2.
+ * Pauses when off-screen to reduce mobile decoder load.
  */
 export function Scene1VideoIntro() {
+  const sectionRef = useRef<HTMLElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
+    const section = sectionRef.current;
     const video = videoRef.current;
-    if (!video) return;
+    if (!section || !video) return;
 
-    // Muted autoplay can still fail after hydration — nudge play.
-    video.play().catch(() => {
-      /* Browser may require a gesture; muted + playsInline usually allows it */
-    });
+    const playSafe = () => {
+      video.play().catch(() => {});
+    };
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) playSafe();
+        else video.pause();
+      },
+      { threshold: 0.15 },
+    );
+
+    io.observe(section);
+    playSafe();
+
+    return () => io.disconnect();
   }, []);
 
   return (
     <section
+      ref={sectionRef}
       id="scene-1-video-intro"
       className="landscape-stage relative w-full overflow-hidden bg-black"
       aria-label="Scene 1: Video Introduction"
     >
-      {/*
-        Placeholder source: replace /assets/intro-video-clean.mp4 with a
-        master that has NO baked-in text or UI overlays.
-      */}
       <video
         ref={videoRef}
         className="landscape-stage__media absolute inset-0"

@@ -1,0 +1,119 @@
+@import url("https://fonts.googleapis.com/css2?family=Anton&family=Bangers&family=Oswald:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Oswald", sans-serif;
+  --font-comic: "Bangers", system-ui, sans-serif;
+  --font-body: "Source Sans 3", sans-serif;
+  --font-tide: "Anton", Impact, "Arial Black", sans-serif;
+
+  --color-sea-deep: #0a1628;
+  --color-sea-mid: #0e3a4f;
+  --color-sea-surface: #1a6b7c;
+  --color-sea-foam: #7eb8c4;
+  --color-harbor-night: #1a1530;
+  --color-harbor-glow: #e8943a;
+  --color-gutom-jacket: #6b4423;
+  --color-comic-yellow: #f5d76e;
+  --color-comic-ink: #0d0d0d;
+  --color-monster-eye: #f0c420;
+}
+
+html {
+  scroll-behavior: auto;
+}
+
+body {
+  margin: 0;
+  background: var(--color-sea-deep);
+  color: #f2f5f7;
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+/* Comic panel chrome */
+.comic-panel {
+  position: relative;
+  overflow: hidden;
+  border: 3px solid #0d0d0d;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.comic-label {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  background: var(--color-comic-yellow);
+  color: var(--color-comic-ink);
+  padding: 0.35rem 0.65rem;
+  border: 2px solid #0d0d0d;
+  box-shadow: 2px 2px 0 #0d0d0d;
+}
+
+.speech-bubble {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: clamp(0.7rem, 1.2vw, 0.95rem);
+  line-height: 1.25;
+  background: #fff;
+  color: #0d0d0d;
+  padding: 0.65rem 0.9rem;
+  border: 2.5px solid #0d0d0d;
+  border-radius: 1.1rem;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.35);
+  max-width: 16rem;
+}
+
+.speech-bubble--jagged {
+  border-radius: 0.35rem 1rem 0.4rem 1.1rem;
+  clip-path: polygon(
+    2% 8%,
+    12% 0%,
+    28% 6%,
+    45% 0%,
+    62% 7%,
+    78% 1%,
+    94% 9%,
+    100% 28%,
+    96% 48%,
+    100% 68%,
+    92% 88%,
+    72% 100%,
+    52% 94%,
+    32% 100%,
+    12% 92%,
+    0% 72%,
+    4% 48%,
+    0% 22%
+  );
+  padding: 1rem 1.15rem;
+}
+
+.sfx {
+  font-family: var(--font-comic);
+  letter-spacing: 0.04em;
+  text-shadow:
+    2px 2px 0 #0d0d0d,
+    -1px -1px 0 #0d0d0d,
+    1px -1px 0 #0d0d0d,
+    -1px 1px 0 #0d0d0d;
+  line-height: 1;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Placeholder asset blocks — swap for <Image> / layered PNGs */
+.asset-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+}

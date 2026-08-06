@@ -6,9 +6,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-const BUBBLE_COUNT_DESKTOP = 36;
-const BUBBLE_COUNT_MOBILE = 14;
-
+const BUBBLE_COUNT = 36;
 
 /**
  * Spawn lightweight bubble divs into a host.
@@ -29,7 +27,7 @@ function createBubbles(host: HTMLElement, count: number): HTMLElement[] {
       "position:absolute",
       "border-radius:9999px",
       "pointer-events:none",
-      "will-change:auto",
+      "will-change:transform",
       `width:${size}px`,
       `height:${size}px`,
       `opacity:${opacity}`,
@@ -70,12 +68,7 @@ export function Scene2DiveTransition() {
        * with a sine-style yoyo so motion feels underwater, not
        * like a straight particle column.
        */
-      const isTouch =
-        window.matchMedia("(hover: none), (pointer: coarse)").matches;
-      const bubbles = createBubbles(
-        host,
-        isTouch ? BUBBLE_COUNT_MOBILE : BUBBLE_COUNT_DESKTOP,
-      );
+      const bubbles = createBubbles(host, BUBBLE_COUNT);
       const vh = window.innerHeight;
 
       // Store rise tweens so scrub can speed them up
@@ -124,18 +117,16 @@ export function Scene2DiveTransition() {
             start: "top top",
             end: "+=180%",
             pin: true,
-            pinType: isTouch ? "transform" : "fixed",
-            scrub: isTouch ? 1 : true,
-            anticipatePin: isTouch ? 0 : 1,
+            scrub: true,
+            anticipatePin: 1,
           },
         })
         .to(
           title,
           {
-            scale: isTouch ? 3.2 : 5,
+            scale: 5,
             opacity: 0,
-            // CSS blur during scrub is a major mobile GPU killer
-            filter: isTouch ? "none" : "blur(6px)",
+            filter: "blur(6px)",
             ease: "power1.in",
             duration: 1,
           },

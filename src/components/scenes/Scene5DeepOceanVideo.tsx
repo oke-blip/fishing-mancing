@@ -6,13 +6,12 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   createDiscreteVideoScrub,
   getPxPerVideoSecond,
-  scheduleScrollTriggerRefresh,
 } from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * Scene5DeepOceanVideo — discrete scrub + lazy load; mobile-throttled fade.
+ * Scene5DeepOceanVideo — discrete scrub + lazy load for mobile reliability.
  */
 export function Scene5DeepOceanVideo() {
   const scrollSpacerRef = useRef<HTMLDivElement>(null);
@@ -22,7 +21,6 @@ export function Scene5DeepOceanVideo() {
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const ctxRef = useRef<gsap.Context | null>(null);
-  const durationRef = useRef(0);
 
   useEffect(() => {
     const spacer = scrollSpacerRef.current;
@@ -30,12 +28,12 @@ export function Scene5DeepOceanVideo() {
 
     const io = new IntersectionObserver(
       ([entry]) => {
-        const visible = Boolean(entry?.isIntersecting);
-        if (visible) setActive(true);
-        const video = videoRef.current;
-        if (video && !visible) video.pause();
+        if (entry?.isIntersecting) {
+          setActive(true);
+          io.disconnect();
+        }
       },
-      { rootMargin: "50% 0px", threshold: 0.01 },
+      { rootMargin: "120% 0px", threshold: 0.01 },
     );
 
     io.observe(spacer);
@@ -49,7 +47,6 @@ export function Scene5DeepOceanVideo() {
     if (!spacer || !pin || !video) return;
     if (!video.duration || Number.isNaN(video.duration) || video.duration === Infinity)
       return;
-    if (ctxRef.current && durationRef.current === video.duration) return;
 
     video.pause();
     try {
@@ -58,11 +55,8 @@ export function Scene5DeepOceanVideo() {
       /* ignore */
     }
 
-    durationRef.current = video.duration;
     spacer.style.height = `${video.duration * getPxPerVideoSecond()}px`;
     setReady(true);
-
-    let lastFade = -1;
 
     ctxRef.current?.revert();
     ctxRef.current = gsap.context(() => {
@@ -78,15 +72,12 @@ export function Scene5DeepOceanVideo() {
         },
         onUpdateExtra: (self) => {
           const fade = Math.min(1, self.progress / 0.2);
-          // Skip tiny opacity thrash on mobile
-          if (Math.abs(fade - lastFade) < 0.03) return;
-          lastFade = fade;
-          pin.style.opacity = String(fade);
+          gsap.set(pin, { opacity: fade });
         },
       });
     }, spacer);
 
-    scheduleScrollTriggerRefresh(200);
+    ScrollTrigger.refresh();
   };
 
   useLayoutEffect(() => {
@@ -105,17 +96,12 @@ export function Scene5DeepOceanVideo() {
     return () => {
       video.removeEventListener("loadedmetadata", onMeta);
       video.removeEventListener("error", onErr);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active]);
-
-  useEffect(() => {
-    return () => {
       ctxRef.current?.revert();
       ctxRef.current = null;
       if (scrollSpacerRef.current) scrollSpacerRef.current.style.height = "";
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
 
   return (
     <div

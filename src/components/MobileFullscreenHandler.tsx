@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { scheduleScrollTriggerRefresh } from "@/components/scenes/discreteVideoScrub";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 /**
  * Sync CSS vars to the visible viewport height so mobile browser chrome
@@ -13,6 +13,7 @@ export function MobileFullscreenHandler() {
 
     const syncVisibleViewport = () => {
       const vv = window.visualViewport;
+      // Prefer layout viewport for width; visual height excludes browser chrome
       const height = Math.round(vv?.height ?? window.innerHeight);
       const width = Math.round(window.innerWidth);
 
@@ -24,12 +25,15 @@ export function MobileFullscreenHandler() {
 
     syncVisibleViewport();
 
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const onChange = () => {
       syncVisibleViewport();
-      scheduleScrollTriggerRefresh(200);
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => ScrollTrigger.refresh(), 150);
     };
 
     const vv = window.visualViewport;
+    // Only resize — not visualViewport "scroll" (fires constantly on iOS and janks layout)
     vv?.addEventListener("resize", onChange);
     window.addEventListener("resize", onChange);
     window.addEventListener("orientationchange", onChange);
@@ -38,6 +42,7 @@ export function MobileFullscreenHandler() {
       vv?.removeEventListener("resize", onChange);
       window.removeEventListener("resize", onChange);
       window.removeEventListener("orientationchange", onChange);
+      clearTimeout(refreshTimer);
     };
   }, []);
 

@@ -6,7 +6,6 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   createDiscreteVideoScrub,
   getPxPerVideoSecond,
-  scheduleScrollTriggerRefresh,
 } from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -21,8 +20,8 @@ type ScrubbedVideoSceneProps = {
 };
 
 /**
- * Scroll-scrubbed video with discrete, rAF-throttled seeks.
- * Lazy-loads once near the viewport; pauses off-screen to ease mobile GPU load.
+ * Scroll-scrubbed video with discrete seeks.
+ * Lazy-activates near the viewport so mobile browsers can actually load scenes.
  */
 export function ScrubbedVideoScene({
   id,
@@ -39,24 +38,20 @@ export function ScrubbedVideoScene({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const ctxRef = useRef<gsap.Context | null>(null);
-  const durationRef = useRef(0);
 
+  // Activate (assign src / load) when near viewport — critical on mobile bandwidth
   useEffect(() => {
     const spacer = scrollSpacerRef.current;
     if (!spacer) return;
 
     const io = new IntersectionObserver(
       ([entry]) => {
-        const visible = Boolean(entry?.isIntersecting);
-        if (visible) setActive(true);
-
-        const video = videoRef.current;
-        if (!video) return;
-        if (!visible) {
-          video.pause();
+        if (entry?.isIntersecting) {
+          setActive(true);
+          io.disconnect();
         }
       },
-      { rootMargin: "50% 0px", threshold: 0.01 },
+      { rootMargin: "120% 0px", threshold: 0.01 },
     );
 
     io.observe(spacer);
@@ -71,9 +66,6 @@ export function ScrubbedVideoScene({
     if (!video.duration || Number.isNaN(video.duration) || video.duration === Infinity)
       return;
 
-    // Avoid rebuilding ST repeatedly (refresh storms = freezes)
-    if (ctxRef.current && durationRef.current === video.duration) return;
-
     video.pause();
     try {
       video.currentTime = 0;
@@ -81,7 +73,6 @@ export function ScrubbedVideoScene({
       /* ignore */
     }
 
-    durationRef.current = video.duration;
     spacer.style.height = `${video.duration * getPxPerVideoSecond()}px`;
     setReady(true);
     setFailed(false);
@@ -95,7 +86,7 @@ export function ScrubbedVideoScene({
       });
     }, spacer);
 
-    scheduleScrollTriggerRefresh(200);
+    ScrollTrigger.refresh();
   };
 
   useLayoutEffect(() => {
@@ -103,7 +94,9 @@ export function ScrubbedVideoScene({
     const video = videoRef.current;
     if (!video) return;
 
+    // Ensure mobile starts the fetch
     video.load();
+
     if (video.readyState >= 1) setupScrub();
 
     const onMeta = () => setupScrub();
@@ -114,17 +107,12 @@ export function ScrubbedVideoScene({
     return () => {
       video.removeEventListener("loadedmetadata", onMeta);
       video.removeEventListener("error", onErr);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, src]);
-
-  useEffect(() => {
-    return () => {
       ctxRef.current?.revert();
       ctxRef.current = null;
       if (scrollSpacerRef.current) scrollSpacerRef.current.style.height = "";
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, src]);
 
   return (
     <div

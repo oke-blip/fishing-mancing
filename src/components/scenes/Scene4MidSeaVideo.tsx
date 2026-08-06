@@ -83,7 +83,6 @@ export function Scene4MidSeaVideo() {
         loop
         muted
         playsInline
-        data-auto-unlock="true"
         preload="auto"
         aria-hidden
       />

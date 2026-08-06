@@ -80,7 +80,7 @@ export function Scene4MidSeaVideo() {
         loop
         muted
         playsInline
-        preload="auto"
+        preload="metadata"
         aria-hidden
       />
 

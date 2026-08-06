@@ -22,7 +22,7 @@ export default function Home() {
           src="/assets/YOUR_BACKGROUND_VIDEO.mp4"
           minViewportHeights={8}
         >
-          <main className="relative min-h-[var(--app-height,100svh)] w-full max-w-[var(--app-width,100svw)] overflow-x-hidden bg-transparent">
+          <main className="relative min-h-[var(--app-height,100svh)] w-full overflow-x-hidden bg-transparent">
             <Scene1VideoIntro />
             <Scene2DiveTransition />
             <HarborSeaSequence />

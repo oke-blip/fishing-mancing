@@ -3,26 +3,9 @@
 import { useEffect } from "react";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 
-type FullscreenDocument = Document & {
-  webkitFullscreenElement?: Element | null;
-};
-
-type FullscreenElement = HTMLElement & {
-  webkitRequestFullscreen?: () => Promise<void> | void;
-};
-
-function isMobileDevice() {
-  if (typeof window === "undefined") return false;
-  return (
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && window.matchMedia("(hover: none)").matches)
-  );
-}
-
 /**
- * Keep CSS --app-height / --app-width locked to the *visible* viewport
- * (excludes mobile browser search / address bar), so stages are never covered.
- * Also tries native fullscreen on first gesture when the browser allows it.
+ * Sync CSS vars to the visible viewport height so mobile browser chrome
+ * does not cover stages. Does NOT request fullscreen (breaks scroll on many phones).
  */
 export function MobileFullscreenHandler() {
   useEffect(() => {
@@ -30,87 +13,35 @@ export function MobileFullscreenHandler() {
 
     const syncVisibleViewport = () => {
       const vv = window.visualViewport;
-      const height = vv?.height ?? window.innerHeight;
-      const width = vv?.width ?? window.innerWidth;
-      const top = vv?.offsetTop ?? 0;
-      const left = vv?.offsetLeft ?? 0;
+      // Prefer layout viewport for width; visual height excludes browser chrome
+      const height = Math.round(vv?.height ?? window.innerHeight);
+      const width = Math.round(window.innerWidth);
 
-      root.style.setProperty("--app-height", `${height}px`);
-      root.style.setProperty("--app-width", `${width}px`);
-      root.style.setProperty("--app-top", `${top}px`);
-      root.style.setProperty("--app-left", `${left}px`);
+      if (height > 0) root.style.setProperty("--app-height", `${height}px`);
+      if (width > 0) root.style.setProperty("--app-width", `${width}px`);
+      root.style.setProperty("--app-top", "0px");
+      root.style.setProperty("--app-left", "0px");
     };
 
     syncVisibleViewport();
 
-    const vv = window.visualViewport;
-    vv?.addEventListener("resize", syncVisibleViewport);
-    vv?.addEventListener("scroll", syncVisibleViewport);
-    window.addEventListener("resize", syncVisibleViewport);
-    window.addEventListener("orientationchange", syncVisibleViewport);
-
-    // After chrome animates, refresh GSAP pin/scrub math
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-    const refreshTriggers = () => {
+    const onChange = () => {
+      syncVisibleViewport();
       clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        syncVisibleViewport();
-        ScrollTrigger.refresh();
-      }, 120);
-    };
-    vv?.addEventListener("resize", refreshTriggers);
-    window.addEventListener("orientationchange", refreshTriggers);
-
-    if (!isMobileDevice()) {
-      return () => {
-        vv?.removeEventListener("resize", syncVisibleViewport);
-        vv?.removeEventListener("scroll", syncVisibleViewport);
-        vv?.removeEventListener("resize", refreshTriggers);
-        window.removeEventListener("resize", syncVisibleViewport);
-        window.removeEventListener("orientationchange", syncVisibleViewport);
-        window.removeEventListener("orientationchange", refreshTriggers);
-        clearTimeout(refreshTimer);
-      };
-    }
-
-    let armed = true;
-    const onFirstGesture = () => {
-      if (!armed) return;
-      armed = false;
-
-      const doc = document as FullscreenDocument;
-      if (document.fullscreenElement || doc.webkitFullscreenElement) return;
-
-      const el = document.documentElement as FullscreenElement;
-      const req =
-        el.requestFullscreen?.bind(el) ||
-        el.webkitRequestFullscreen?.bind(el);
-      if (req) {
-        Promise.resolve(req()).catch(() => {
-          /* iOS Safari often blocks — visualViewport sizing still applies */
-        });
-      }
-
-      window.removeEventListener("touchend", onFirstGesture);
-      window.removeEventListener("pointerup", onFirstGesture);
-      window.removeEventListener("click", onFirstGesture);
+      refreshTimer = setTimeout(() => ScrollTrigger.refresh(), 150);
     };
 
-    window.addEventListener("touchend", onFirstGesture, { passive: true });
-    window.addEventListener("pointerup", onFirstGesture, { passive: true });
-    window.addEventListener("click", onFirstGesture);
+    const vv = window.visualViewport;
+    // Only resize — not visualViewport "scroll" (fires constantly on iOS and janks layout)
+    vv?.addEventListener("resize", onChange);
+    window.addEventListener("resize", onChange);
+    window.addEventListener("orientationchange", onChange);
 
     return () => {
-      armed = false;
-      vv?.removeEventListener("resize", syncVisibleViewport);
-      vv?.removeEventListener("scroll", syncVisibleViewport);
-      vv?.removeEventListener("resize", refreshTriggers);
-      window.removeEventListener("resize", syncVisibleViewport);
-      window.removeEventListener("orientationchange", syncVisibleViewport);
-      window.removeEventListener("orientationchange", refreshTriggers);
-      window.removeEventListener("touchend", onFirstGesture);
-      window.removeEventListener("pointerup", onFirstGesture);
-      window.removeEventListener("click", onFirstGesture);
+      vv?.removeEventListener("resize", onChange);
+      window.removeEventListener("resize", onChange);
+      window.removeEventListener("orientationchange", onChange);
       clearTimeout(refreshTimer);
     };
   }, []);

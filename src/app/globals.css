@@ -74,9 +74,15 @@ body {
   object-position: center;
 }
 
+@media (orientation: portrait) and (hover: none),
+  (orientation: portrait) and (pointer: coarse) {
+  .portrait-lock {
+    display: block !important;
+  }
+}
+
 @media (orientation: portrait) {
-  html,
-  body,
+  /* Only apply lock styles when JS marks a real mobile portrait session */
   html.is-portrait,
   body.is-portrait {
     overflow: hidden !important;
@@ -86,20 +92,28 @@ body {
     overscroll-behavior: none !important;
   }
 
-  .portrait-lock {
+  html.is-portrait .portrait-lock,
+  body.is-portrait .portrait-lock {
     display: block !important;
   }
 
-  /* Hide / freeze comic while locked */
-  .comic-root {
+  html.is-portrait .comic-root,
+  body.is-portrait .comic-root {
     visibility: hidden;
     pointer-events: none;
-    overflow: hidden !important;
-    height: var(--app-height, 100svh) !important;
   }
 }
 
 @media (orientation: landscape) {
+  html,
+  body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    height: auto;
+    max-height: none;
+    touch-action: pan-y;
+  }
+
   .portrait-lock {
     display: none !important;
     pointer-events: none !important;
@@ -108,21 +122,20 @@ body {
   .comic-root {
     visibility: visible;
     pointer-events: auto;
+    height: auto !important;
+    overflow: visible !important;
   }
 }
 
 /*
- * Landscape stage — sized to the visible viewport (svh / visualViewport),
- * so the mobile search bar never covers scene content.
+ * Landscape stage — prefer svh (chrome visible) so content isn't covered.
  */
 .landscape-stage {
   position: relative;
   width: 100%;
-  width: var(--app-width, 100svw);
   height: 100svh;
   height: var(--app-height, 100svh);
-  max-width: var(--app-width, 100svw);
-  max-height: var(--app-height, 100svh);
+  max-width: 100%;
   overflow: hidden;
 }
 

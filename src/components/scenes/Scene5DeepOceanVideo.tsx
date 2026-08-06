@@ -1,37 +1,61 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   createDiscreteVideoScrub,
-  PX_PER_VIDEO_SECOND,
+  getPxPerVideoSecond,
 } from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * Scene5DeepOceanVideo — deep-ocean clip with discrete TIME_STEP seeks.
- * Fade-in on the first 20% of scroll; video progress maps across the rest.
+ * Scene5DeepOceanVideo — discrete scrub + lazy load for mobile reliability.
  */
 export function Scene5DeepOceanVideo() {
   const scrollSpacerRef = useRef<HTMLDivElement>(null);
   const pinRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [active, setActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const ctxRef = useRef<gsap.Context | null>(null);
+
+  useEffect(() => {
+    const spacer = scrollSpacerRef.current;
+    if (!spacer) return;
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setActive(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "120% 0px", threshold: 0.01 },
+    );
+
+    io.observe(spacer);
+    return () => io.disconnect();
+  }, []);
 
   const setupScrub = () => {
     const spacer = scrollSpacerRef.current;
     const pin = pinRef.current;
     const video = videoRef.current;
     if (!spacer || !pin || !video) return;
-    if (!video.duration || Number.isNaN(video.duration)) return;
+    if (!video.duration || Number.isNaN(video.duration) || video.duration === Infinity)
+      return;
 
     video.pause();
-    video.currentTime = 0;
-    spacer.style.height = `${video.duration * PX_PER_VIDEO_SECOND}px`;
+    try {
+      video.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+
+    spacer.style.height = `${video.duration * getPxPerVideoSecond()}px`;
     setReady(true);
 
     ctxRef.current?.revert();
@@ -42,7 +66,6 @@ export function Scene5DeepOceanVideo() {
         trigger: spacer,
         pin,
         video,
-        // First 20% of scroll = fade-in only; remainder drives the playhead
         progressToVideo: (p) => {
           if (p <= 0.2) return 0;
           return (p - 0.2) / 0.8;
@@ -58,18 +81,27 @@ export function Scene5DeepOceanVideo() {
   };
 
   useLayoutEffect(() => {
+    if (!active) return;
     const video = videoRef.current;
-    if (video && video.readyState >= 1) {
-      setupScrub();
-    }
+    if (!video) return;
+
+    video.load();
+    if (video.readyState >= 1) setupScrub();
+
+    const onMeta = () => setupScrub();
+    const onErr = () => setFailed(true);
+    video.addEventListener("loadedmetadata", onMeta);
+    video.addEventListener("error", onErr);
 
     return () => {
+      video.removeEventListener("loadedmetadata", onMeta);
+      video.removeEventListener("error", onErr);
       ctxRef.current?.revert();
       ctxRef.current = null;
       if (scrollSpacerRef.current) scrollSpacerRef.current.style.height = "";
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [active]);
 
   return (
     <div
@@ -100,12 +132,11 @@ export function Scene5DeepOceanVideo() {
         <video
           ref={videoRef}
           className="landscape-stage__media absolute inset-0"
-          src="/assets/scene5-deep-sea.mp4"
+          src={active ? "/assets/scene5-deep-sea.mp4" : undefined}
           muted
           playsInline
-          preload="auto"
-          onLoadedMetadata={setupScrub}
-          onError={() => setFailed(true)}
+          preload="metadata"
+          disableRemotePlayback
           aria-hidden
         />
       </div>

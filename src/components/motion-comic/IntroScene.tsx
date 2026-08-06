@@ -119,7 +119,7 @@ export function IntroScene() {
     <section
       ref={sectionRef}
       id="intro-scene"
-      className="intro-scene relative h-screen w-full overflow-hidden"
+      className="intro-scene relative h-[100dvh] w-full overflow-hidden"
       aria-label="Introduction: Captain Gutom The Old Salt and the Deep"
     >
       <div className="intro__stage absolute inset-0 origin-center will-change-transform">

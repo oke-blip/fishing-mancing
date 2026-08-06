@@ -72,7 +72,7 @@ export function Scene8Climax() {
     <section
       ref={sectionRef}
       id="scene-8-climax"
-      className="relative h-screen w-screen overflow-hidden bg-[#050a10]"
+      className="relative h-[100dvh] w-[100dvw] overflow-hidden bg-[#050a10]"
       aria-label="Scene 8: Climax — To Be Continued"
     >
       {/* Background — replace scene8-bg.jpg with final still / plate */}
@@ -81,7 +81,7 @@ export function Scene8Climax() {
         alt=""
         fill
         sizes="100vw"
-        className="absolute inset-0 object-cover"
+        className="absolute inset-0 h-full w-full object-cover"
         priority
       />
       <div

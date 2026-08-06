@@ -63,14 +63,14 @@ export function Scene7ActionPanels() {
     <section
       ref={sectionRef}
       id="scene-7-action-panels"
-      className="relative h-screen w-screen overflow-hidden bg-comic-ink"
+      className="relative h-[100dvh] w-[100dvw] overflow-hidden bg-comic-ink"
       aria-label="Scene 7: Action Panels"
     >
       <div className="scene-7__track flex h-full w-[300vw] will-change-transform">
         {PANELS.map((panel) => (
           <div
             key={panel.src}
-            className="relative h-full w-screen shrink-0 overflow-hidden"
+            className="relative h-full w-[100dvw] shrink-0 overflow-hidden"
           >
             {/* Swap src paths above for final panel JPGs / layered PNGs */}
             <Image
@@ -78,7 +78,7 @@ export function Scene7ActionPanels() {
               alt={panel.label}
               fill
               sizes="100vw"
-              className="object-cover"
+              className="h-full w-full object-cover"
               priority
             />
             <span className="comic-label absolute top-5 left-5 z-10">

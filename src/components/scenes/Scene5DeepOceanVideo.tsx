@@ -3,130 +3,93 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  createDiscreteVideoScrub,
+  PX_PER_VIDEO_SECOND,
+} from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
 
-/** 1 second of video ≈ this many pixels of scroll (higher = slower) */
-const PX_PER_VIDEO_SECOND = 1000;
-
 /**
- * Scene5DeepOceanVideo — ultra-slow, smooth scroll-scrubbed deep-ocean clip.
- *
- * After loadedmetadata, scroll height = duration × 1000px (no fixed vh).
- * scrub: 1.5 eases the playhead toward scroll for buttery catch-up.
+ * Scene5DeepOceanVideo — deep-ocean clip with discrete TIME_STEP seeks.
+ * Fade-in on the first 20% of scroll; video progress maps across the rest.
  */
 export function Scene5DeepOceanVideo() {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
+  const scrollSpacerRef = useRef<HTMLDivElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [metaReady, setMetaReady] = useState(false);
-  const [metaError, setMetaError] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const ctxRef = useRef<gsap.Context | null>(null);
+
+  const setupScrub = () => {
+    const spacer = scrollSpacerRef.current;
+    const pin = pinRef.current;
+    const video = videoRef.current;
+    if (!spacer || !pin || !video) return;
+    if (!video.duration || Number.isNaN(video.duration)) return;
+
+    video.pause();
+    video.currentTime = 0;
+    spacer.style.height = `${video.duration * PX_PER_VIDEO_SECOND}px`;
+    setReady(true);
+
+    ctxRef.current?.revert();
+    ctxRef.current = gsap.context(() => {
+      gsap.set(pin, { opacity: 0 });
+
+      createDiscreteVideoScrub({
+        trigger: spacer,
+        pin,
+        video,
+        // First 20% of scroll = fade-in only; remainder drives the playhead
+        progressToVideo: (p) => {
+          if (p <= 0.2) return 0;
+          return (p - 0.2) / 0.8;
+        },
+        onUpdateExtra: (self) => {
+          const fade = Math.min(1, self.progress / 0.2);
+          gsap.set(pin, { opacity: fade });
+        },
+      });
+    }, spacer);
+
+    ScrollTrigger.refresh();
+  };
 
   useLayoutEffect(() => {
-    const scrollContainer = scrollRef.current;
-    const panel = panelRef.current;
     const video = videoRef.current;
-    if (!scrollContainer || !panel || !video) return;
-
-    let ctx: gsap.Context | null = null;
-    let cancelled = false;
-
-    const bindScrollVideo = () => {
-      if (cancelled || !video.duration || Number.isNaN(video.duration)) return;
-
-      setMetaReady(true);
-      video.pause();
-      video.currentTime = 0;
-
-      /**
-       * Dynamic spacer — maps 1s of footage to 1000px of scrolling.
-       * A normal wheel notch only advances a fraction of a second.
-       */
-      scrollContainer.style.height = `${video.duration * PX_PER_VIDEO_SECOND}px`;
-
-      ctx?.revert();
-      ctx = gsap.context(() => {
-        gsap.set(panel, { opacity: 0 });
-
-        /**
-         * Sticky panel stays in view while the tall spacer scrolls.
-         * scrub: 1.5 = smooth lag (playhead eases toward scroll position).
-         *
-         * 0–20%  fade-in
-         * 20–100% currentTime 0 → duration
-         */
-        gsap
-          .timeline({
-            scrollTrigger: {
-              trigger: scrollContainer,
-              start: "top top",
-              end: "bottom bottom",
-              scrub: 1.5,
-              invalidateOnRefresh: true,
-            },
-          })
-          .to(
-            panel,
-            {
-              opacity: 1,
-              ease: "none",
-              duration: 0.2,
-            },
-            0,
-          )
-          .to(
-            video,
-            {
-              currentTime: video.duration,
-              ease: "none",
-              duration: 0.8,
-            },
-            0.2,
-          );
-      }, scrollContainer);
-
-      ScrollTrigger.refresh();
-    };
-
-    const onLoaded = () => bindScrollVideo();
-    const onError = () => setMetaError(true);
-
-    if (video.readyState >= 1) {
-      bindScrollVideo();
-    } else {
-      video.addEventListener("loadedmetadata", onLoaded);
-      video.addEventListener("error", onError);
+    if (video && video.readyState >= 1) {
+      setupScrub();
     }
 
     return () => {
-      cancelled = true;
-      video.removeEventListener("loadedmetadata", onLoaded);
-      video.removeEventListener("error", onError);
-      ctx?.revert();
-      scrollContainer.style.height = "";
+      ctxRef.current?.revert();
+      ctxRef.current = null;
+      if (scrollSpacerRef.current) scrollSpacerRef.current.style.height = "";
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div
-      ref={scrollRef}
+      ref={scrollSpacerRef}
       id="scene-5-deep-ocean"
       className="relative z-20 w-full bg-[#020b14]"
       aria-label="Scene 5: Deep Ocean"
     >
-      {/* Sticky viewport — in view for the full dynamic scroll height */}
-      <section
-        ref={panelRef}
-        className="sticky top-0 h-screen w-full overflow-hidden bg-[#020b14]"
+      <div
+        ref={pinRef}
+        className="landscape-stage relative w-full overflow-hidden bg-[#020b14]"
       >
-        {!metaReady && !metaError && (
+        {!ready && !failed && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#020b14]">
             <p className="font-[family-name:var(--font-body)] text-xs tracking-[0.35em] text-sea-foam/50 uppercase">
               Descending…
             </p>
           </div>
         )}
-        {metaError && (
+        {failed && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#020b14]">
             <p className="font-[family-name:var(--font-body)] text-sm text-white/70">
               Unable to load deep-sea video.
@@ -136,14 +99,16 @@ export function Scene5DeepOceanVideo() {
 
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="landscape-stage__media absolute inset-0"
           src="/assets/scene5-deep-sea.mp4"
           muted
           playsInline
           preload="auto"
+          onLoadedMetadata={setupScrub}
+          onError={() => setFailed(true)}
           aria-hidden
         />
-      </section>
+      </div>
     </div>
   );
 }

@@ -9,7 +9,7 @@ export function Scene0Intro() {
   return (
     <section
       id="scene-0"
-      className="scene-0 relative h-screen w-full overflow-hidden bg-black"
+      className="scene-0 relative h-[100dvh] w-full overflow-hidden bg-black"
       aria-label="Scene 0: Introduction"
     >
       {/* Pure video stage — no text overlays */}

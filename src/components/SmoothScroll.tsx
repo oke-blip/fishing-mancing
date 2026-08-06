@@ -7,10 +7,13 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
+function isPortrait() {
+  return window.matchMedia("(orientation: portrait)").matches;
+}
+
 /**
- * SmoothScroll — Lenis momentum scrolling synced with GSAP ScrollTrigger.
- * Wraps the comic so wheel events become continuous inertia instead of
- * discrete jumps (critical for scrubbed video playheads).
+ * SmoothScroll — Lenis + ScrollTrigger.
+ * Pauses completely in portrait so the rotate overlay owns the screen.
  */
 export function SmoothScroll({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -22,19 +25,36 @@ export function SmoothScroll({ children }: { children: ReactNode }) {
 
     lenis.on("scroll", ScrollTrigger.update);
 
+    const syncPortrait = () => {
+      if (isPortrait()) {
+        lenis.stop();
+        lenis.scrollTo(0, { immediate: true });
+      } else {
+        lenis.start();
+        ScrollTrigger.refresh();
+      }
+    };
+
+    syncPortrait();
+    window.addEventListener("orientationchange", syncPortrait);
+    window.addEventListener("resize", syncPortrait);
+
     const tick = (time: number) => {
-      // GSAP ticker is in seconds; Lenis expects ms
-      lenis.raf(time * 1000);
+      if (!isPortrait()) {
+        lenis.raf(time * 1000);
+      }
     };
 
     gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
 
     return () => {
+      window.removeEventListener("orientationchange", syncPortrait);
+      window.removeEventListener("resize", syncPortrait);
       gsap.ticker.remove(tick);
       lenis.destroy();
     };
   }, []);
 
-  return children;
+  return <div className="comic-root">{children}</div>;
 }

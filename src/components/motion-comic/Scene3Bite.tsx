@@ -8,7 +8,7 @@ export function Scene3Bite() {
   return (
     <section
       id="scene-3"
-      className="scene-3 relative h-screen w-full overflow-hidden"
+      className="scene-3 relative h-[100dvh] w-full overflow-hidden"
       aria-label="Scene 3: The Bite"
     >
       <div className="scene-3__pin relative grid h-full w-full grid-cols-1 grid-rows-[1.1fr_1fr] gap-1 bg-comic-ink md:grid-cols-2 md:grid-rows-2">

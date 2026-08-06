@@ -150,7 +150,7 @@ export function HarborSeaSequence() {
     <section
       ref={rootRef}
       id="harbor-sea-sequence"
-      className="relative h-screen w-full overflow-hidden"
+      className="landscape-stage relative w-full overflow-hidden"
       aria-label="Harbor to Mid-Sea"
     >
       <div className="harbor-sea-track flex h-full w-[200vw] will-change-transform">

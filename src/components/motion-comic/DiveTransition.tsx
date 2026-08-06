@@ -148,7 +148,7 @@ export function DiveTransition() {
     <section
       ref={sectionRef}
       id="dive-transition"
-      className="dive-transition relative h-screen w-full overflow-hidden"
+      className="dive-transition relative h-[100dvh] w-full overflow-hidden"
       aria-label="Dive Transition: Into the Tide"
     >
       <div className="dive__stage absolute inset-0">

@@ -2,10 +2,7 @@
 
 import { ScrubbedVideoScene } from "./ScrubbedVideoScene";
 
-/**
- * Scene7Video — action / struggle beat (scroll-scrubbed MP4).
- * Same Lenis-friendly playhead lerp as Scene 6.
- */
+/** Scene 7 — action beat (`/assets/scene7.mp4`), discrete 0.1s seeks */
 export function Scene7Video() {
   return (
     <ScrubbedVideoScene
@@ -14,7 +11,7 @@ export function Scene7Video() {
       ariaLabel="Scene 7: Action"
       loadingLabel="The line holds…"
       errorLabel="Unable to load Scene 7 video."
-      className="bg-[#041018]"
+      className="bg-[#02080f]"
     />
   );
 }

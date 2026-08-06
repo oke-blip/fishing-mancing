@@ -8,12 +8,12 @@ export function Scene1Departure() {
   return (
     <section
       id="scene-1"
-      className="scene-1 relative h-screen w-full overflow-hidden"
+      className="scene-1 relative h-[100dvh] w-full overflow-hidden"
       aria-label="Scene 1: The Departure"
     >
       <div className="scene-1__track flex h-full w-[300vw] will-change-transform">
         {/* Panel A — Harbor docks */}
-        <div className="comic-panel relative h-full w-screen shrink-0 bg-[#1a1530]">
+        <div className="comic-panel relative h-full w-[100dvw] shrink-0 bg-[#1a1530]">
           <AssetPlaceholder
             label="BG: Harbor Night (image_0793a2)"
             className="absolute inset-0 bg-gradient-to-b from-[#2a2048] via-[#1e3550] to-[#1a3a28]"
@@ -43,7 +43,7 @@ export function Scene1Departure() {
         </div>
 
         {/* Panel B — Setting sail */}
-        <div className="comic-panel relative h-full w-screen shrink-0 bg-[#4a7a9a]">
+        <div className="comic-panel relative h-full w-[100dvw] shrink-0 bg-[#4a7a9a]">
           <AssetPlaceholder
             label="BG: Open Sea Sunrise"
             className="absolute inset-0 bg-gradient-to-b from-[#87b8d4] via-[#f0c070] to-[#2a6a7a]"
@@ -76,7 +76,7 @@ export function Scene1Departure() {
         </div>
 
         {/* Panel C — The cast */}
-        <div className="comic-panel relative h-full w-screen shrink-0 bg-[#5a9aba]">
+        <div className="comic-panel relative h-full w-[100dvw] shrink-0 bg-[#5a9aba]">
           <AssetPlaceholder
             label="BG: Day Sea + Gulls"
             className="absolute inset-0 bg-gradient-to-b from-[#8ec4e0] via-[#6aabcc] to-[#2a7a8a]"

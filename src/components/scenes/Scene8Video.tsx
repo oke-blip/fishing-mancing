@@ -2,10 +2,7 @@
 
 import { ScrubbedVideoScene } from "./ScrubbedVideoScene";
 
-/**
- * Scene8Video — climax / cliffhanger (scroll-scrubbed MP4).
- * Same ultra-smooth ticker lerp + duration × 1000px scroll as Scene 6.
- */
+/** Scene 8 — climax / cliffhanger (`/assets/scene8.mp4`), discrete 0.1s seeks */
 export function Scene8Video() {
   return (
     <ScrubbedVideoScene

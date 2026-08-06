@@ -159,7 +159,7 @@ export function Scene2DiveTransition() {
     <section
       ref={sectionRef}
       id="scene-2-dive-transition"
-      className="relative h-screen w-full overflow-hidden bg-[linear-gradient(180deg,#041428_0%,#0a2a4a_40%,#0d3d5c_65%,#071828_100%)]"
+      className="landscape-stage relative w-full overflow-hidden bg-[linear-gradient(180deg,#041428_0%,#0a2a4a_40%,#0d3d5c_65%,#071828_100%)]"
       aria-label="Scene 2: Into the Tide"
     >
       {/* Bubble layer — filled by createBubbles() */}

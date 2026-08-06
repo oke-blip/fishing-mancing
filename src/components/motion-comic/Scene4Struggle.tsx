@@ -8,12 +8,12 @@ export function Scene4Struggle() {
   return (
     <section
       id="scene-4"
-      className="scene-4 relative h-screen w-full overflow-hidden"
+      className="scene-4 relative h-[100dvh] w-full overflow-hidden"
       aria-label="Scene 4: The Struggle & Reveal"
     >
       <div className="scene-4__track flex h-full w-[200vw] will-change-transform">
         {/* Panel — Monster breach */}
-        <div className="comic-panel relative h-full w-screen shrink-0 bg-[#1a2830]">
+        <div className="comic-panel relative h-full w-[100dvw] shrink-0 bg-[#1a2830]">
           <AssetPlaceholder
             label="BG: Stormy Sea (image_079342)"
             className="scene-4__sky absolute inset-0 bg-gradient-to-b from-[#2a3540] via-[#3a4a55] to-[#1a4a5a]"
@@ -49,7 +49,7 @@ export function Scene4Struggle() {
         </div>
 
         {/* Panel — Gutom intensity + next chapter freeze */}
-        <div className="comic-panel relative h-full w-screen shrink-0 bg-[#6a8a9a]">
+        <div className="comic-panel relative h-full w-[100dvw] shrink-0 bg-[#6a8a9a]">
           <AssetPlaceholder
             label="BG: Pale Sky Close-up"
             className="absolute inset-0 bg-gradient-to-b from-[#a8c0cc] to-[#6a8a98]"

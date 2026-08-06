@@ -13,7 +13,7 @@ export function Scene2Depths() {
     >
       {/* Tall scroll runway — camera follows jig downward */}
       <div className="scene-2__column relative h-[300vh] w-full overflow-hidden">
-        <div className="scene-2__world sticky top-0 h-screen w-full overflow-hidden">
+        <div className="scene-2__world sticky top-0 h-[100dvh] w-full overflow-hidden">
           <div className="scene-2__layers absolute inset-x-0 top-0 h-[200%] will-change-transform">
             {/* Surface / upper water */}
             <div className="comic-panel absolute inset-x-0 top-0 h-1/2 bg-[#0e5a6e]">

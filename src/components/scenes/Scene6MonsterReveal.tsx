@@ -3,8 +3,8 @@
 import { ScrubbedVideoScene } from "./ScrubbedVideoScene";
 
 /**
- * Scene6MonsterReveal — jig / monster reveal (scroll-scrubbed MP4).
- * Uses shared ScrubbedVideoScene: playhead proxy + ticker lerp.
+ * Scene6MonsterReveal — jig / monster reveal.
+ * Discrete TIME_STEP (0.1s) seeks via ScrubbedVideoScene.
  */
 export function Scene6MonsterReveal() {
   return (

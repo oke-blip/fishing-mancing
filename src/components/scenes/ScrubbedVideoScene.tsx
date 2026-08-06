@@ -1,14 +1,14 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import {
+  createDiscreteVideoScrub,
+  PX_PER_VIDEO_SECOND,
+} from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
-
-const PX_PER_VIDEO_SECOND = 1000;
-const LERP = 0.1;
-const SEEK_EPSILON = 0.01;
 
 type ScrubbedVideoSceneProps = {
   id: string;
@@ -17,15 +17,11 @@ type ScrubbedVideoSceneProps = {
   loadingLabel?: string;
   errorLabel?: string;
   className?: string;
-  children?: ReactNode;
 };
 
 /**
- * Shared ultra-smooth scroll-scrubbed video panel (Scene 6/7/8 pattern).
- *
- * • Dynamic height = duration × 1000px after loadedmetadata
- * • ScrollTrigger animates playhead.time (scrub: 1), NOT currentTime
- * • gsap.ticker lerps video.currentTime → playhead.time at ~60fps
+ * Full-viewport scroll-scrubbed video with discrete TIME_STEP seeking.
+ * Height = duration × 1000px after loadedmetadata; pin + onUpdate (no scrub tween).
  */
 export function ScrubbedVideoScene({
   id,
@@ -35,97 +31,63 @@ export function ScrubbedVideoScene({
   errorLabel = "Unable to load video.",
   className = "bg-[#02080f]",
 }: ScrubbedVideoSceneProps) {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLElement>(null);
+  const scrollSpacerRef = useRef<HTMLDivElement>(null);
+  const pinRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [metaReady, setMetaReady] = useState(false);
-  const [metaError, setMetaError] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const ctxRef = useRef<gsap.Context | null>(null);
+
+  const setupScrub = () => {
+    const spacer = scrollSpacerRef.current;
+    const pin = pinRef.current;
+    const video = videoRef.current;
+    if (!spacer || !pin || !video) return;
+    if (!video.duration || Number.isNaN(video.duration)) return;
+
+    video.pause();
+    video.currentTime = 0;
+    spacer.style.height = `${video.duration * PX_PER_VIDEO_SECOND}px`;
+    setReady(true);
+
+    ctxRef.current?.revert();
+    ctxRef.current = gsap.context(() => {
+      createDiscreteVideoScrub({
+        trigger: spacer,
+        pin,
+        video,
+      });
+    }, spacer);
+
+    ScrollTrigger.refresh();
+  };
 
   useLayoutEffect(() => {
-    const scrollContainer = scrollContainerRef.current;
-    const panel = panelRef.current;
     const video = videoRef.current;
-    if (!scrollContainer || !panel || !video) return;
-
-    let ctx: gsap.Context | null = null;
-    let cancelled = false;
-    let tickerFn: ((time: number, deltaTime: number, frame: number) => void) | null =
-      null;
-
-    const bindScrollVideo = () => {
-      if (cancelled || !video.duration || Number.isNaN(video.duration)) return;
-
-      setMetaReady(true);
-      video.pause();
-      video.currentTime = 0;
-
-      scrollContainer.style.height = `${video.duration * PX_PER_VIDEO_SECOND}px`;
-
-      const playhead = { time: 0 };
-
-      if (tickerFn) gsap.ticker.remove(tickerFn);
-      ctx?.revert();
-
-      ctx = gsap.context(() => {
-        gsap.to(playhead, {
-          time: video.duration,
-          ease: "none",
-          scrollTrigger: {
-            trigger: scrollContainer,
-            start: "top top",
-            end: "bottom bottom",
-            pin: panel,
-            scrub: 1,
-            anticipatePin: 1,
-            invalidateOnRefresh: true,
-          },
-        });
-      }, scrollContainer);
-
-      tickerFn = () => {
-        if (!video || cancelled) return;
-        const diff = playhead.time - video.currentTime;
-        if (Math.abs(diff) > SEEK_EPSILON) {
-          video.currentTime += diff * LERP;
-        }
-      };
-
-      gsap.ticker.add(tickerFn);
-      ScrollTrigger.refresh();
-    };
-
-    const onLoaded = () => bindScrollVideo();
-    const onError = () => setMetaError(true);
-
-    if (video.readyState >= 1) {
-      bindScrollVideo();
-    } else {
-      video.addEventListener("loadedmetadata", onLoaded);
-      video.addEventListener("error", onError);
+    if (video && video.readyState >= 1) {
+      setupScrub();
     }
 
     return () => {
-      cancelled = true;
-      video.removeEventListener("loadedmetadata", onLoaded);
-      video.removeEventListener("error", onError);
-      if (tickerFn) gsap.ticker.remove(tickerFn);
-      ctx?.revert();
-      scrollContainer.style.height = "";
+      ctxRef.current?.revert();
+      ctxRef.current = null;
+      if (scrollSpacerRef.current) scrollSpacerRef.current.style.height = "";
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bind once; metadata handler re-inits
   }, [src]);
 
   return (
     <div
-      ref={scrollContainerRef}
+      ref={scrollSpacerRef}
       id={id}
       className={`relative z-20 w-full ${className}`}
       aria-label={ariaLabel}
     >
-      <section
-        ref={panelRef}
-        className={`relative h-screen w-screen overflow-hidden ${className}`}
+      <div
+        ref={pinRef}
+        className={`landscape-stage relative overflow-hidden ${className}`}
       >
-        {!metaReady && !metaError && (
+        {!ready && !failed && (
           <div
             className={`absolute inset-0 z-10 flex items-center justify-center ${className}`}
           >
@@ -134,7 +96,7 @@ export function ScrubbedVideoScene({
             </p>
           </div>
         )}
-        {metaError && (
+        {failed && (
           <div
             className={`absolute inset-0 z-10 flex items-center justify-center ${className}`}
           >
@@ -146,14 +108,16 @@ export function ScrubbedVideoScene({
 
         <video
           ref={videoRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="landscape-stage__media absolute inset-0"
           src={src}
           muted
           playsInline
           preload="auto"
+          onLoadedMetadata={setupScrub}
+          onError={() => setFailed(true)}
           aria-hidden
         />
-      </section>
+      </div>
     </div>
   );
 }

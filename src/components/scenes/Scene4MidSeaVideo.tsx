@@ -68,13 +68,13 @@ export function Scene4MidSeaVideo() {
     <section
       ref={sectionRef}
       id="scene-4-mid-sea"
-      className="relative h-full w-screen shrink-0 overflow-hidden bg-[#061828]"
+      className="relative h-full w-[100dvw] max-w-[100dvw] shrink-0 overflow-hidden bg-[#061828]"
       aria-label="Scene 4: Mid-Sea Journey"
     >
       {/* Layer 1 — looping video */}
       <video
         ref={videoRef}
-        className="absolute inset-0 z-0 h-full w-full object-cover"
+        className="landscape-stage__media absolute inset-0 z-0"
         src="/assets/scene4-sailing-loop.mp4"
         autoPlay
         loop

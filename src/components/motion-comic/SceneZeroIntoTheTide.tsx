@@ -157,7 +157,7 @@ export function SceneZeroIntoTheTide() {
     <section
       ref={rootRef}
       id="scene-zero"
-      className="scene-zero relative h-screen w-full overflow-hidden"
+      className="scene-zero relative h-[100dvh] w-full overflow-hidden"
       aria-label="Scene 0: Into the Tide"
     >
       {/* Deep immersive blue — tone of image_5.png */}

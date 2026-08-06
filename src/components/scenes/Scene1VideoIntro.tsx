@@ -22,7 +22,7 @@ export function Scene1VideoIntro() {
   return (
     <section
       id="scene-1-video-intro"
-      className="relative h-screen w-full overflow-hidden bg-black"
+      className="landscape-stage relative w-full overflow-hidden bg-black"
       aria-label="Scene 1: Video Introduction"
     >
       {/*
@@ -31,7 +31,7 @@ export function Scene1VideoIntro() {
       */}
       <video
         ref={videoRef}
-        className="absolute inset-0 h-full w-full object-cover"
+        className="landscape-stage__media absolute inset-0"
         src="/assets/intro-video-clean.mp4"
         autoPlay
         loop

@@ -17,7 +17,7 @@ export function Scene3Harbor() {
   return (
     <section
       id="scene-3-harbor"
-      className="relative h-full w-screen shrink-0 overflow-hidden bg-[#061428]"
+      className="relative h-full w-[100dvw] max-w-[100dvw] shrink-0 overflow-hidden bg-[#061428]"
       aria-label="Scene 3: The Harbor Departure"
     >
       {/* image_13 — always visible */}
@@ -27,7 +27,7 @@ export function Scene3Harbor() {
         fill
         priority
         sizes="100vw"
-        className="harbor-bg pointer-events-none absolute inset-0 z-0 object-cover"
+        className="harbor-bg landscape-stage__media pointer-events-none absolute inset-0 z-0"
       />
 
       {/*

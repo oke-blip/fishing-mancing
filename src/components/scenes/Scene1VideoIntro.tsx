@@ -3,8 +3,7 @@
 import { useEffect, useRef } from "react";
 
 /**
- * Scene1VideoIntro — full-viewport looping video.
- * Pauses when off-screen to reduce mobile decoder load.
+ * Scene1VideoIntro — looping intro. Always loads src; unlocks play on gesture.
  */
 export function Scene1VideoIntro() {
   const sectionRef = useRef<HTMLElement>(null);
@@ -15,7 +14,15 @@ export function Scene1VideoIntro() {
     const video = videoRef.current;
     if (!section || !video) return;
 
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("webkit-playsinline", "true");
+    video.dataset.autoUnlock = "true";
+    video.preload = "auto";
+
     const playSafe = () => {
+      video.muted = true;
       video.play().catch(() => {});
     };
 
@@ -24,13 +31,19 @@ export function Scene1VideoIntro() {
         if (entry?.isIntersecting) playSafe();
         else video.pause();
       },
-      { threshold: 0.15 },
+      { threshold: 0.1 },
     );
 
     io.observe(section);
     playSafe();
 
-    return () => io.disconnect();
+    const onGesture = () => playSafe();
+    window.addEventListener("touchstart", onGesture, { passive: true, once: true });
+
+    return () => {
+      io.disconnect();
+      window.removeEventListener("touchstart", onGesture);
+    };
   }, []);
 
   return (
@@ -49,6 +62,7 @@ export function Scene1VideoIntro() {
         muted
         playsInline
         preload="auto"
+        data-auto-unlock="true"
         aria-hidden
       />
     </section>

@@ -48,7 +48,7 @@ export function Scene1VideoIntro() {
         loop
         muted
         playsInline
-        preload="metadata"
+        preload="auto"
         aria-hidden
       />
     </section>

@@ -7,12 +7,13 @@ import {
   createDiscreteVideoScrub,
   getPxPerVideoSecond,
   scheduleScrollTriggerRefresh,
+  whenVideoPlayable,
 } from "./discreteVideoScrub";
 
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * Scene5DeepOceanVideo — discrete scrub + lazy load; mobile-throttled fade.
+ * Scene5DeepOceanVideo — waits for playable frames, mobile scroll-end scrub.
  */
 export function Scene5DeepOceanVideo() {
   const scrollSpacerRef = useRef<HTMLDivElement>(null);
@@ -23,6 +24,7 @@ export function Scene5DeepOceanVideo() {
   const [failed, setFailed] = useState(false);
   const ctxRef = useRef<gsap.Context | null>(null);
   const durationRef = useRef(0);
+  const setupLockRef = useRef(false);
 
   useEffect(() => {
     const spacer = scrollSpacerRef.current;
@@ -35,21 +37,34 @@ export function Scene5DeepOceanVideo() {
         const video = videoRef.current;
         if (video && !visible) video.pause();
       },
-      { rootMargin: "50% 0px", threshold: 0.01 },
+      { rootMargin: "80% 0px", threshold: 0.01 },
     );
 
     io.observe(spacer);
     return () => io.disconnect();
   }, []);
 
-  const setupScrub = () => {
+  const setupScrub = async () => {
     const spacer = scrollSpacerRef.current;
     const pin = pinRef.current;
     const video = videoRef.current;
-    if (!spacer || !pin || !video) return;
-    if (!video.duration || Number.isNaN(video.duration) || video.duration === Infinity)
+    if (!spacer || !pin || !video || setupLockRef.current) return;
+
+    setupLockRef.current = true;
+    video.preload = "auto";
+
+    const ok = await whenVideoPlayable(video);
+    if (!ok || !video.duration || Number.isNaN(video.duration)) {
+      setFailed(true);
+      setupLockRef.current = false;
       return;
-    if (ctxRef.current && durationRef.current === video.duration) return;
+    }
+
+    if (ctxRef.current && durationRef.current === video.duration) {
+      setReady(true);
+      setupLockRef.current = false;
+      return;
+    }
 
     video.pause();
     try {
@@ -78,15 +93,15 @@ export function Scene5DeepOceanVideo() {
         },
         onUpdateExtra: (self) => {
           const fade = Math.min(1, self.progress / 0.2);
-          // Skip tiny opacity thrash on mobile
-          if (Math.abs(fade - lastFade) < 0.03) return;
+          if (Math.abs(fade - lastFade) < 0.04) return;
           lastFade = fade;
           pin.style.opacity = String(fade);
         },
       });
     }, spacer);
 
-    scheduleScrollTriggerRefresh(200);
+    scheduleScrollTriggerRefresh(250);
+    setupLockRef.current = false;
   };
 
   useLayoutEffect(() => {
@@ -94,18 +109,10 @@ export function Scene5DeepOceanVideo() {
     const video = videoRef.current;
     if (!video) return;
 
-    video.load();
-    if (video.readyState >= 1) setupScrub();
-
-    const onMeta = () => setupScrub();
+    void setupScrub();
     const onErr = () => setFailed(true);
-    video.addEventListener("loadedmetadata", onMeta);
     video.addEventListener("error", onErr);
-
-    return () => {
-      video.removeEventListener("loadedmetadata", onMeta);
-      video.removeEventListener("error", onErr);
-    };
+    return () => video.removeEventListener("error", onErr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
@@ -149,7 +156,7 @@ export function Scene5DeepOceanVideo() {
           src={active ? "/assets/scene5-deep-sea.mp4" : undefined}
           muted
           playsInline
-          preload="metadata"
+          preload={active ? "auto" : "none"}
           disableRemotePlayback
           aria-hidden
         />
